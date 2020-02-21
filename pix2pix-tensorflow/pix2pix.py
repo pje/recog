@@ -46,7 +46,9 @@ parser.add_argument("--gan_weight", type=float, default=1.0, help="weight on GAN
 
 # export options
 parser.add_argument("--output_filetype", default="png", choices=["png", "jpeg"])
-a = parser.parse_args()
+
+# uncomment for runnning on Google Colab
+# a = parser.parse_args(["--mode", "train", "--output_dir", "../output/edges2shoes_AtoB", "--max_epochs", "10", "--input_dir", "edges2shoes/train", "--which_direction", "AtoB"])
 
 EPS = 1e-12
 CROP_SIZE = 256
