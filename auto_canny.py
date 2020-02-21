@@ -1,16 +1,20 @@
-# adapted from https://www.pyimagesearch.com/2015/04/06/zero-parameter-automatic-canny-edge-detection-with-python-and-opencv/
+"""
+Runs canny edge-detection algorithm on supplied images, outputs to output/ dir
+
+adapted from https://bit.ly/2HJtVc7
+"""
 
 import ntpath
 import os
 import argparse
 import cv2
-import numpy as np
+import numpy
 
 
-def auto_canny(image: str, sigma: float = 0.33) -> np.ndarray:
+def auto_canny(image: str, sigma: float = 0.33) -> numpy.ndarray:
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     blurred = cv2.GaussianBlur(gray, (3, 3), 0)
-    median = np.median(blurred)
+    median = numpy.median(blurred)
     lower = int(max(0, (1.0 - sigma) * median))
     upper = int(min(255, (1.0 + sigma) * median))
     edged = cv2.Canny(image, lower, upper)
