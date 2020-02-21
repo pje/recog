@@ -34,6 +34,7 @@ def main():
         "-o",
         "--out-dir",
         required=True,
+        type=__dir_path,
         help="output, directory. where to write the edge detection images"
     )
     args = vars(arg_parser.parse_args())
@@ -43,6 +44,14 @@ def main():
         filename = ntpath.split(image_path)[-1]
         cv2.imwrite(os.path.join(args["out_dir"], filename), auto)
         cv2.waitKey(0)
+
+
+def __dir_path(path):
+    if os.path.isdir(path):
+        return path
+    else:
+        raise argparse.ArgumentTypeError(
+            f"readable_dir:{path} is not a directory or doesn't exist")
 
 
 if __name__ == "__main__":
