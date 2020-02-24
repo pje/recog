@@ -13,7 +13,12 @@ import collections
 import math
 import time
 
-args_from_env = os.environ.get('PIX2PIX_CLI_ARGS') # hack to get this working on google colab
+
+# hack for google colab
+try:
+    CLI_ARGS
+except NameError:
+    CLI_ARGS = None
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--input_dir", help="path to folder containing images")
@@ -51,8 +56,8 @@ parser.add_argument("--output_filetype", default="png", choices=["png", "jpeg"])
 
 a = None
 
-if args_from_env:
-    a = parser.parse_args(args_from_env.split())
+if CLI_ARGS:
+    a = parser.parse_args(CLI_ARGS)
 else:
     a = parser.parse_args()
 
