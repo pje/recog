@@ -51,7 +51,7 @@ parser.add_argument("--output_filetype", default="png", choices=["png", "jpeg"])
 
 a = None
 
-if foo:
+if args_from_env:
     a = parser.parse_args(args_from_env.split())
 else:
     a = parser.parse_args()
