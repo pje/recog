@@ -13,6 +13,8 @@ import collections
 import math
 import time
 
+args_from_env = os.environ.get('PIX2PIX_CLI_ARGS') # hack to get this working on google colab
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--input_dir", help="path to folder containing images")
 parser.add_argument("--mode", required=True, choices=["train", "test", "export"])
@@ -47,8 +49,12 @@ parser.add_argument("--gan_weight", type=float, default=1.0, help="weight on GAN
 # export options
 parser.add_argument("--output_filetype", default="png", choices=["png", "jpeg"])
 
-# uncomment for runnning on Google Colab
-# a = parser.parse_args(["--mode", "train", "--output_dir", "../output/edges2shoes_AtoB", "--max_epochs", "10", "--input_dir", "edges2shoes/train", "--which_direction", "AtoB"])
+a = None
+
+if foo:
+    a = parser.parse_args(args_from_env.split())
+else:
+    a = parser.parse_args()
 
 EPS = 1e-12
 CROP_SIZE = 256
