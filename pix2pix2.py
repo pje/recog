@@ -33,7 +33,8 @@ else: # we ARE running on colab. Use Drive for file reads/writes
 
 CHECKPOINT_DIR = os.path.join(CHECKPOINTS_DIR, DATASET_NAME)
 CHECKPOINT_PREFIX = os.path.join(CHECKPOINT_DIR, 'ckpt')
-LOG_DIR = 'logs/'
+LOGS_DIR = os.path.join(ROOT_DIR, 'logs')
+LOG_DIR = os.path.join(LOGS_DIR, 'fit', datetime.datetime.now().strftime('%Y%m%d-%H%M%S'))
 BUFFER_SIZE = 400
 BATCH_SIZE = 1
 IMG_WIDTH = 256
@@ -43,9 +44,7 @@ LAMBDA = 100
 EPOCHS = 100
 CHECKPOINT_SAVE_FREQUENCY = 20 # in epochs
 
-SUMMARY_WRITER = tf.summary.create_file_writer(
-    LOG_DIR + 'fit/' + datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-)
+SUMMARY_WRITER = tf.summary.create_file_writer(LOG_DIR)
 
 def load(image_file):
     image = tf.io.read_file(image_file)
@@ -341,7 +340,13 @@ def fit(generator, discriminator, generator_optimizer, discriminator_optimizer, 
         print()
 
         if (epoch + 1) % CHECKPOINT_SAVE_FREQUENCY == 0:
+            # save our checkpoint!
             checkpoint_manager.save()
+            # also: generate a random image from this epoch and save it to disk
+            for example_input, _example_target in train_dataset.take(1):
+                prediction = generator(example_input, training=True)
+                encoded_image = tf.image.encode_jpeg(tf.dtypes.cast((prediction[0] * 0.5 + 0.5) * 255, tf.uint8))
+                tf.io.write_file(os.path.join(LOG_DIR, "epoch_" + str(epoch) + ".jpg"), encoded_image)
 
         print(
             'Time taken for epoch {} is {} sec\n'.format(
