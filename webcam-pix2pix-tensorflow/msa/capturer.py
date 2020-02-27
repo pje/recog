@@ -46,6 +46,8 @@ class Capturer(threading.Thread):
             return
 
 
+        self.img = None
+        
         self.frame_stats = FrameStats('Capturer')
         
         self.output_shape = output_shape

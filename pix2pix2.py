@@ -4,6 +4,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import datetime
 from glob import glob
+import numpy as np
 import os
 from pathlib import Path
 import tarfile
@@ -11,8 +12,8 @@ import time
 import tensorflow as tf
 from matplotlib import pyplot as plt
 
-DATASET_NAME = 'flickr_flowers_canny_AtoB_512'
-IMG_SIZE = 512 # images must be square
+DATASET_NAME = 'flickr_flowers_AtoB'
+IMG_SIZE = 256 # images must be square
 
 ROOT_DIR = Path().resolve()
 UNIQUE_SESSION_NAME = DATASET_NAME + '_' + datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
@@ -422,18 +423,35 @@ def main():
     #
     # generate some example output from random input images
     #
-    # i = 0
-    # for example_input, _example_target in train_dataset.take(10):
-    #     prediction = generator(example_input, training=True)
-    #     encoded_image = tf.image.encode_jpeg(tf.dtypes.cast((prediction[0] * 0.5 + 0.5) * 255, tf.uint8))
-    #     tf.io.write_file(
-    #         os.path.join(
-    #             LOG_DIR,
-    #             UNIQUE_SESSION_NAME + "_generated_" + str(i) + ".jpg"
-    #         ),
-    #         encoded_image
-    #     )
-    #     i = i + 1
+    i = 0
+    for example_input, _example_target in train_dataset.take(1):
+        input_image = tf.io.read_file('rando/test_screen.png')
+        input_image = tf.image.decode_image(
+            input_image,
+            channels=3, # desired channels in *output* image after conversion
+            # dtype=tf.float32 # desired dtype of *output* image after conversion
+        )
+        input_image = tf.cast(input_image, tf.float32)
+        input_image = tf.expand_dims(input_image, 0) if len(input_image.shape) < 4 else input_image # prepend the fourth dimension (batch) to the tensor for some reason
+        input_image = tf.image.grayscale_to_rgb(input_image) if (input_image.shape)[3] == 1 else input_image # if we only have one dimension in the final channel (i.e. it's a b&w image), then convert it to RGB by just making it (1, x, y, 3) instead of (1, x, y, 1)
+        input_image = input_image
+        input_image, _ = normalize(input_image, input_image) # transform values: (0..255) -> (-1..1)
+        # input_image = input_image[:,:,:,:3] # discard alpha channel if it's there
+
+        tf.print(input_image, summarize=-1)
+        print("...........\n\n\n\n ")
+        # print(example_input)
+        # example_input = tf.image.rot90(example_input)
+        prediction = generator(input_image, training=True)
+        encoded_image = tf.image.encode_jpeg(tf.dtypes.cast((prediction[0] * 0.5 + 0.5) * 255, tf.uint8))
+        tf.io.write_file(
+            os.path.join(
+                LOG_DIR,
+                UNIQUE_SESSION_NAME + "_generated_" + str(i) + ".jpg"
+            ),
+            encoded_image
+        )
+        i = i + 1
 
     #### python3 pix2pix2.py save_model
     #
@@ -452,19 +470,20 @@ def main():
     #     train_dataset=train_dataset.take(1),
     #     epochs=1
     # )
-    # generator.save(os.path.join('models', 'generator.h5'))
-    # print('saved to {}'.format(os.path.join('models', 'generator.h5')))
+    # save_path = os.path.join('models', DATASET_NAME + '_generator.h5')
+    # generator.save(save_path)
+    # print('saved to {}'.format(save_path))
 
     #### python3 pix2pix2.py train
     #
-    fit(
-        generator=generator,
-        discriminator=discriminator,
-        generator_optimizer=generator_optimizer,
-        discriminator_optimizer=discriminator_optimizer,
-        checkpoint=checkpoint,
-        train_dataset=train_dataset,
-        epochs=MAX_EPOCHS
-    )
+    # fit(
+    #     generator=generator,
+    #     discriminator=discriminator,
+    #     generator_optimizer=generator_optimizer,
+    #     discriminator_optimizer=discriminator_optimizer,
+    #     checkpoint=checkpoint,
+    #     train_dataset=train_dataset,
+    #     epochs=MAX_EPOCHS
+    # )
 
 main()
