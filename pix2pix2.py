@@ -11,8 +11,11 @@ import time
 import tensorflow as tf
 from matplotlib import pyplot as plt
 
-DATASET_NAME = 'flickr_flowers_AtoB'
+DATASET_NAME = 'flickr_flowers_canny_AtoB_512'
+IMG_SIZE = 512 # images must be square
+
 ROOT_DIR = Path().resolve()
+UNIQUE_SESSION_NAME = DATASET_NAME + '_' + datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
 
 try:
     from google.colab import drive
@@ -32,19 +35,22 @@ else: # we ARE running on colab. Use Drive for file reads/writes
         tar.close()
 
 CHECKPOINT_DIR = os.path.join(CHECKPOINTS_DIR, DATASET_NAME)
-CHECKPOINT_PREFIX = os.path.join(CHECKPOINT_DIR, 'ckpt')
+CHECKPOINT_PREFIX = 'ckpt'
 LOGS_DIR = os.path.join(ROOT_DIR, 'logs')
-LOG_DIR = os.path.join(LOGS_DIR, 'fit', datetime.datetime.now().strftime('%Y%m%d-%H%M%S'))
+LOG_DIR = os.path.join(LOGS_DIR, UNIQUE_SESSION_NAME)
 BUFFER_SIZE = 400
 BATCH_SIZE = 1
-IMG_WIDTH = 256
-IMG_HEIGHT = 256
 OUTPUT_CHANNELS = 3
 LAMBDA = 100
-EPOCHS = 100
+MAX_EPOCHS = 1000
 CHECKPOINT_SAVE_FREQUENCY = 20 # in epochs
 
 SUMMARY_WRITER = tf.summary.create_file_writer(LOG_DIR)
+
+def console():
+    from code import InteractiveConsole
+    InteractiveConsole(locals={**globals(), **locals(), **vars()}).interact()
+
 
 def load(image_file):
     image = tf.io.read_file(image_file)
@@ -70,8 +76,8 @@ def load_image_test(image_file):
     input_image, real_image = resize(
         input_image,
         real_image,
-        IMG_HEIGHT,
-        IMG_WIDTH
+        IMG_SIZE,
+        IMG_SIZE
     )
     input_image, real_image = normalize(input_image, real_image)
     return input_image, real_image
@@ -95,7 +101,7 @@ def random_crop(input_image, real_image):
     stacked_image = tf.stack([input_image, real_image], axis=0)
     cropped_image = tf.image.random_crop(
         stacked_image,
-        size=[2, IMG_HEIGHT, IMG_WIDTH, 3]
+        size=[2, IMG_SIZE, IMG_SIZE, 3]
     )
     return cropped_image[0], cropped_image[1]
 
@@ -109,9 +115,11 @@ def normalize(input_image, real_image):
 
 @tf.function()
 def random_jitter(input_image, real_image):
-    # resizing to 286 x 286 x 3
-    input_image, real_image = resize(input_image, real_image, 286, 286)
-    # randomly cropping to 256 x 256 x 3
+    scaling_factor = 1.1171875 # turns 256 into 286 (as the original paper used)
+    scaled_size = round(scaling_factor * IMG_SIZE)
+    # resize to 286 x 286 x 3
+    input_image, real_image = resize(input_image, real_image, scaled_size, scaled_size)
+    # ...then randomly crop it back down to 256 x 256 x 3
     input_image, real_image = random_crop(input_image, real_image)
     if tf.random.uniform(()) > 0.5:
         # random mirroring
@@ -159,25 +167,25 @@ def upsample(filters, size, apply_dropout=False):
 
 
 def Generator():
-    inputs = tf.keras.layers.Input(shape=[256, 256, 3])
+    inputs = tf.keras.layers.Input(shape=[IMG_SIZE, IMG_SIZE, 3])
     down_stack = [
-        downsample(64, 4, apply_batchnorm=False),
-        downsample(128, 4),
-        downsample(256, 4),
-        downsample(512, 4),
-        downsample(512, 4),
-        downsample(512, 4),
-        downsample(512, 4),
-        downsample(512, 4),
+        downsample(round(IMG_SIZE / 4), 4, apply_batchnorm=False),
+        downsample(round(IMG_SIZE / 2), 4),
+        downsample(round(IMG_SIZE * 1), 4),
+        downsample(round(IMG_SIZE * 2), 4),
+        downsample(round(IMG_SIZE * 2), 4),
+        downsample(round(IMG_SIZE * 2), 4),
+        downsample(round(IMG_SIZE * 2), 4),
+        downsample(round(IMG_SIZE * 2), 4),
     ]
     up_stack = [
-        upsample(512, 4, apply_dropout=True),
-        upsample(512, 4, apply_dropout=True),
-        upsample(512, 4, apply_dropout=True),
-        upsample(512, 4),
-        upsample(256, 4),
-        upsample(128, 4),
-        upsample(64, 4),
+        upsample(round(IMG_SIZE * 2), 4, apply_dropout=True),
+        upsample(round(IMG_SIZE * 2), 4, apply_dropout=True),
+        upsample(round(IMG_SIZE * 2), 4, apply_dropout=True),
+        upsample(round(IMG_SIZE * 2), 4),
+        upsample(round(IMG_SIZE * 1), 4),
+        upsample(round(IMG_SIZE / 2), 4),
+        upsample(round(IMG_SIZE / 4), 4),
     ]
     initializer = tf.random_normal_initializer(0., 0.02)
     last = tf.keras.layers.Conv2DTranspose(
@@ -221,15 +229,15 @@ def generator_loss(disc_generated_output, gen_output, target):
 
 def Discriminator():
     initializer = tf.random_normal_initializer(0., 0.02)
-    inp = tf.keras.layers.Input(shape=[256, 256, 3], name='input_image')
-    tar = tf.keras.layers.Input(shape=[256, 256, 3], name='target_image')
+    inp = tf.keras.layers.Input(shape=[IMG_SIZE, IMG_SIZE, 3], name='input_image')
+    tar = tf.keras.layers.Input(shape=[IMG_SIZE, IMG_SIZE, 3], name='target_image')
     x = tf.keras.layers.concatenate([inp, tar])
-    down1 = downsample(64, 4, False)(x)
-    down2 = downsample(128, 4)(down1)
-    down3 = downsample(256, 4)(down2)
+    down1 = downsample(round(IMG_SIZE / 4), 4, False)(x)
+    down2 = downsample(round(IMG_SIZE / 2), 4)(down1)
+    down3 = downsample(round(IMG_SIZE * 1), 4)(down2)
     zero_pad1 = tf.keras.layers.ZeroPadding2D()(down3)
     conv = tf.keras.layers.Conv2D(
-        512,
+        round(IMG_SIZE * 2),
         4,
         strides=1,
         kernel_initializer=initializer,
@@ -268,8 +276,7 @@ def generate_images(model, input, target):
     for i in range(3):
         plt.subplot(1, 3, i+1)
         plt.title(title[i])
-        # getting the pixel values between [0, 1] to plot it.
-        plt.imshow(display_list[i] * 0.5 + 0.5)
+        plt.imshow(display_list[i] * 0.5 + 0.5) # transform values: (-1..1) -> (0..1)
         plt.axis('off')
     plt.show()
 
@@ -318,10 +325,10 @@ def train_step(generator, discriminator, generator_optimizer, discriminator_opti
         tf.summary.scalar('disc_loss', disc_loss, step=epoch)
 
 
-def fit(generator, discriminator, generator_optimizer, discriminator_optimizer, checkpoint_manager, train_dataset, epochs):
+def fit(generator, discriminator, generator_optimizer, discriminator_optimizer, checkpoint, train_dataset, epochs):
     for epoch in range(epochs):
         start = time.time()
-        print("Epoch: ", epoch)
+        print("Epoch ", epoch)
 
         # Train
         for n, (input_image, target) in train_dataset.enumerate():
@@ -339,42 +346,42 @@ def fit(generator, discriminator, generator_optimizer, discriminator_optimizer, 
             )
         print()
 
-        if (epoch + 1) % CHECKPOINT_SAVE_FREQUENCY == 0:
-            # save our checkpoint!
-            checkpoint_manager.save()
-            # also: generate a random image from this epoch and save it to disk
-            for example_input, _example_target in train_dataset.take(1):
-                prediction = generator(example_input, training=True)
-                encoded_image = tf.image.encode_jpeg(tf.dtypes.cast((prediction[0] * 0.5 + 0.5) * 255, tf.uint8))
-                tf.io.write_file(os.path.join(LOG_DIR, "epoch_" + str(epoch) + ".jpg"), encoded_image)
+        # generate & save a random image at the end of every epoch
+        for example_input, _example_target in train_dataset.take(1):
+            prediction = generator(example_input, training=True)
+            encoded_image = tf.image.encode_jpeg(tf.dtypes.cast((prediction[0] * 0.5 + 0.5) * 255, tf.uint8))
+            tf.io.write_file(
+                os.path.join(
+                    LOG_DIR,
+                    UNIQUE_SESSION_NAME + "_epoch_" + str(epoch) + ".jpg"
+                ),
+                encoded_image
+            )
 
         print(
-            'Time taken for epoch {} is {} sec\n'.format(
-                epoch + 1, time.time()-start
-            )
+            'Epoch {} took {} sec\n'.format(epoch, time.time() - start)
         )
 
-    checkpoint_manager.save()
+        # save our checkpoint every 20 epochs (this is slow as model size grows)
+        if (epoch != 0) and (epoch % CHECKPOINT_SAVE_FREQUENCY == 0):
+            print('Saving checkpoint to {}\n'.format(CHECKPOINT_DIR))
+            checkpoint.write(os.path.join(CHECKPOINT_DIR, CHECKPOINT_PREFIX))
+
+    checkpoint.write(os.path.join(CHECKPOINT_DIR, CHECKPOINT_PREFIX))
 
 
 def main():
-    train_dataset = tf.data.Dataset.list_files(
-        glob(os.path.join(DATASET_DIR, '*.jpg')) +
-            glob(os.path.join(DATASET_DIR, '*.png'))
-    )
+    train_files = glob(os.path.join(DATASET_DIR, '*.jpg')) + glob(os.path.join(DATASET_DIR, '*.png'))
+    if len(train_files) < 1:
+        raise Exception("No training images exist in {}".format(DATASET_DIR))
+
+    train_dataset = tf.data.Dataset.list_files(train_files)
     train_dataset = train_dataset.map(
         load_image_train,
         num_parallel_calls=tf.data.experimental.AUTOTUNE
     )
     train_dataset = train_dataset.shuffle(BUFFER_SIZE)
     train_dataset = train_dataset.batch(BATCH_SIZE)
-
-    test_dataset = tf.data.Dataset.list_files(
-        glob(os.path.join(DATASET_DIR, '*.jpg')) +
-            glob(os.path.join(DATASET_DIR, '*.png'))
-    )
-    test_dataset = test_dataset.map(load_image_test)
-    test_dataset = test_dataset.batch(BATCH_SIZE)
 
     generator = Generator()
     discriminator = Discriminator()
@@ -396,25 +403,23 @@ def main():
         generator=generator,
         discriminator=discriminator
     )
-    checkpoint_manager = tf.train.CheckpointManager(
-        checkpoint,
-        CHECKPOINT_DIR,
-        max_to_keep=1
-    )
 
-    if checkpoint_manager.latest_checkpoint:
-        status = checkpoint.restore(checkpoint_manager.latest_checkpoint)
+    # a little unusual because we only store 1 checkpoint (storage constraints)
+    # if  os.path.isfile(os.path.join(CHECKPOINT_DIR, 'checkpoint')):
+    latest_checkpoint = tf.train.latest_checkpoint(CHECKPOINT_DIR)
+    if latest_checkpoint:
+        status = checkpoint.restore(latest_checkpoint)
         status.assert_existing_objects_matched()
-        print("Restored from {}".format(checkpoint_manager.latest_checkpoint))
+        print("Restored from {}".format(latest_checkpoint))
     else:
         print(
-            "No existing checkpoint found in CHECKPOINT_DIR, {}. Initializing from scratch.".format(
+            "No checkpoint found in {}. Initializing from scratch.".format(
                 CHECKPOINT_DIR
             )
         )
 
     # generate some example output from random input images
-    # for example_input, example_target in test_dataset.take(1):
+    # for example_input, example_target in train_dataset.take(1):
     #     generate_images(generator, example_input, example_target)
 
     # train
@@ -423,9 +428,9 @@ def main():
         discriminator=discriminator,
         generator_optimizer=generator_optimizer,
         discriminator_optimizer=discriminator_optimizer,
-        checkpoint_manager=checkpoint_manager,
+        checkpoint=checkpoint,
         train_dataset=train_dataset,
-        epochs=EPOCHS
+        epochs=MAX_EPOCHS
     )
 
 main()
