@@ -281,7 +281,7 @@ def generate_images(model, input, target):
     plt.show()
 
 
-@tf.function
+@tf.function()
 def train_step(generator, discriminator, generator_optimizer, discriminator_optimizer, input_image, target, epoch):
     with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
         gen_output = generator(input_image, training=True)
@@ -418,11 +418,45 @@ def main():
             )
         )
 
+    #### python3 pix2pix2.py predict [n=1]
+    #
     # generate some example output from random input images
-    # for example_input, example_target in train_dataset.take(1):
-    #     generate_images(generator, example_input, example_target)
+    #
+    # i = 0
+    # for example_input, _example_target in train_dataset.take(10):
+    #     prediction = generator(example_input, training=True)
+    #     encoded_image = tf.image.encode_jpeg(tf.dtypes.cast((prediction[0] * 0.5 + 0.5) * 255, tf.uint8))
+    #     tf.io.write_file(
+    #         os.path.join(
+    #             LOG_DIR,
+    #             UNIQUE_SESSION_NAME + "_generated_" + str(i) + ".jpg"
+    #         ),
+    #         encoded_image
+    #     )
+    #     i = i + 1
 
-    # train
+    #### python3 pix2pix2.py save_model
+    #
+    # save the generator model to disk
+    # we have to do a phony "fit" epoch of a single image so that the optimizer
+    # gets initialized properly. without running this, optimizers won't get
+    # saved correctly for some reason.
+    #
+    # print('running a single phony training epoch to initialize the optimizers...')
+    # fit(
+    #     generator=generator,
+    #     discriminator=discriminator,
+    #     generator_optimizer=generator_optimizer,
+    #     discriminator_optimizer=discriminator_optimizer,
+    #     checkpoint=checkpoint,
+    #     train_dataset=train_dataset.take(1),
+    #     epochs=1
+    # )
+    # generator.save(os.path.join('models', 'generator.h5'))
+    # print('saved to {}'.format(os.path.join('models', 'generator.h5')))
+
+    #### python3 pix2pix2.py train
+    #
     fit(
         generator=generator,
         discriminator=discriminator,
