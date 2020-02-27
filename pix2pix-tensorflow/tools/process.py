@@ -16,7 +16,6 @@ import multiprocessing
 
 edge_pool = None
 
-
 parser = argparse.ArgumentParser()
 parser.add_argument("--input_dir", required=True, help="path to folder containing images")
 parser.add_argument("--output_dir", required=True, help="output path")
@@ -89,7 +88,7 @@ def combine(src, src_path):
     height, width, _ = src.shape
     if height != sibling.shape[0] or width != sibling.shape[1]:
         raise Exception("differing sizes")
-    
+
     # convert both images to RGB if necessary
     if src.shape[2] == 1:
         src = im.grayscale_to_rgb(images=src)
@@ -100,7 +99,7 @@ def combine(src, src_path):
     # remove alpha channel
     if src.shape[2] == 4:
         src = src[:,:,:3]
-    
+
     if sibling.shape[2] == 4:
         sibling = sibling[:,:,:3]
 
@@ -122,13 +121,13 @@ def run_caffe(src):
         # using this requires using the docker image or assembling a bunch of dependencies
         # and then changing these hardcoded paths
         net = caffe.Net("/opt/caffe/examples/hed/deploy.prototxt", "/opt/caffe/hed_pretrained_bsds.caffemodel", caffe.TEST)
-        
+
     net.blobs["data"].reshape(1, *src.shape)
     net.blobs["data"].data[...] = src
     net.forward()
     return net.blobs["sigmoid-fuse"].data[0][0,:,:]
 
-    
+
 def edges(src):
     # based on https://github.com/phillipi/pix2pix/blob/master/scripts/edges/batch_hed.py
     # and https://github.com/phillipi/pix2pix/blob/master/scripts/edges/PostprocessHED.m
@@ -147,7 +146,7 @@ def edges(src):
 
     with tempfile.NamedTemporaryFile(suffix=".png") as png_file, tempfile.NamedTemporaryFile(suffix=".mat") as mat_file:
         scipy.io.savemat(mat_file.name, {"input": fuse})
-        
+
         octave_code = r"""
 E = 1-load(input_path).input;
 E = imresize(E, [image_width,image_width]);
@@ -247,17 +246,17 @@ def main():
         else:
             src_paths.append(src_path)
             dst_paths.append(dst_path)
-    
+
     print("skipping %d files that already exist" % skipped)
-            
+
     global total
     total = len(src_paths)
-    
+
     print("processing %d files" % total)
 
     global start
     start = time.time()
-    
+
     if a.operation == "edges":
         # use a multiprocessing pool for this operation so it can use multiple CPUs
         # create the pool before we launch processing threads
@@ -265,12 +264,12 @@ def main():
         edge_pool = multiprocessing.Pool(a.workers)
 
     if a.workers == 1:
-        with tf.Session() as sess:
+        with tf.compat.v1.Session() as sess:
             for src_path, dst_path in zip(src_paths, dst_paths):
                 process(src_path, dst_path)
                 complete()
     else:
-        queue = tf.train.input_producer(zip(src_paths, dst_paths), shuffle=False, num_epochs=1)
+        queue = tf.compat.v1.train.input_producer(zip(src_paths, dst_paths), shuffle=False, num_epochs=1)
         dequeue_op = queue.dequeue()
 
         def worker(coord):
@@ -286,17 +285,17 @@ def main():
                     complete()
 
         # init epoch counter for the queue
-        local_init_op = tf.local_variables_initializer()
-        with tf.Session() as sess:
+        local_init_op = tf.compat.v1.local_variables_initializer()
+        with tf.compat.v1.Session() as sess:
             sess.run(local_init_op)
 
             coord = tf.train.Coordinator()
-            threads = tf.train.start_queue_runners(coord=coord)
+            threads = tf.compat.v1.train.start_queue_runners(coord=coord)
             for i in range(a.workers):
                 t = threading.Thread(target=worker, args=(coord,))
                 t.start()
                 threads.append(t)
-            
+
             try:
                 coord.join(threads)
             except KeyboardInterrupt:
