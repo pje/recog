@@ -12,8 +12,8 @@ import time
 import tensorflow as tf
 from matplotlib import pyplot as plt
 
-DATASET_NAME = 'flickr_flowers_AtoB'
-IMG_SIZE = 256 # images must be square
+DATASET_NAME = 'flickr_flowers_canny_AtoB_512'
+IMG_SIZE = 512 # images must be square
 
 ROOT_DIR = Path().resolve()
 UNIQUE_SESSION_NAME = DATASET_NAME + '_' + datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
@@ -360,7 +360,7 @@ def fit(generator, discriminator, generator_optimizer, discriminator_optimizer, 
 
 
 def main():
-    train_files = glob(os.path.join(DATASET_DIR, '**', '*.jpg')) + glob(os.path.join(DATASET_DIR, '**', '*.png'))
+    train_files = glob(os.path.join(DATASET_DIR, '**', '*.png'), recursive=True) + glob(os.path.join(DATASET_DIR, '**', '*.jpg'), recursive=True)
     if len(train_files) < 1:
         raise Exception("No training images exist in {}".format(DATASET_DIR))
 
