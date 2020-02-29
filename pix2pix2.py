@@ -10,10 +10,11 @@ from pathlib import Path
 import tarfile
 import time
 import tensorflow as tf
+import tensorflowjs as tfjs
 from matplotlib import pyplot as plt
 
-DATASET_NAME = 'flickr_flowers_canny_AtoB_512'
-IMG_SIZE = 512 # images must be square
+DATASET_NAME = 'flickr_flowers_AtoB'
+IMG_SIZE = 256 # images must be square
 
 ROOT_DIR = Path().resolve()
 UNIQUE_SESSION_NAME = DATASET_NAME + '_' + datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
@@ -36,6 +37,7 @@ else: # we ARE running on colab. Use Drive for file reads/writes
         tar.close()
 
 CHECKPOINT_DIR = os.path.join(CHECKPOINTS_DIR, DATASET_NAME)
+TFJS_EXPORT_DIR = os.path.join(ROOT_DIR, 'tensorflowjs', DATASET_NAME)
 CHECKPOINT_PREFIX = 'ckpt'
 LOGS_DIR = os.path.join(ROOT_DIR, 'logs')
 LOG_DIR = os.path.join(LOGS_DIR, UNIQUE_SESSION_NAME)
@@ -116,13 +118,13 @@ def random_jitter(input_image, real_image):
         real_image = tf.image.flip_left_right(real_image)
     return input_image, real_image
 
-def downsample(filters, size, apply_batchnorm=True):
+def downsample(filters, kernel_size, apply_batchnorm=True, **kwargs):
     initializer = tf.random_normal_initializer(0., 0.02)
     result = tf.keras.Sequential()
     result.add(
         tf.keras.layers.Conv2D(
             filters,
-            size,
+            kernel_size,
             strides=2,
             padding='same',
             kernel_initializer=initializer,
@@ -135,13 +137,13 @@ def downsample(filters, size, apply_batchnorm=True):
     return result
 
 
-def upsample(filters, size, apply_dropout=False):
+def upsample(filters, kernel_size, apply_dropout=False):
     initializer = tf.random_normal_initializer(0., 0.02)
     result = tf.keras.Sequential()
     result.add(
         tf.keras.layers.Conv2DTranspose(
             filters,
-            size,
+            kernel_size,
             strides=2,
             padding='same',
             kernel_initializer=initializer,
@@ -158,7 +160,7 @@ def upsample(filters, size, apply_dropout=False):
 def Generator():
     inputs = tf.keras.layers.Input(shape=[IMG_SIZE, IMG_SIZE, 3])
     down_stack = [
-        downsample(round(IMG_SIZE / 4), 4, apply_batchnorm=False),
+        downsample(round(IMG_SIZE / 4), 4, apply_batchnorm=False, input_shape=[IMG_SIZE, IMG_SIZE, 3]),
         downsample(round(IMG_SIZE / 2), 4),
         downsample(round(IMG_SIZE * 1), 4),
         downsample(round(IMG_SIZE * 2), 4),
@@ -461,6 +463,9 @@ def main():
     generator.save(save_path)
     print('saved to {}'.format(save_path))
 
+    tfjs.converters.save_keras_model(generator, TFJS_EXPORT_DIR + '_generator')
+    print('saved to {}'.format(TFJS_EXPORT_DIR + '_generator'))
+
     #### python3 pix2pix2.py train
     #
     # fit(
@@ -473,4 +478,5 @@ def main():
     #     epochs=MAX_EPOCHS
     # )
 
-main()
+if __name__ == '__main__':
+    main()
