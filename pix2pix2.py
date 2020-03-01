@@ -9,10 +9,11 @@ import os
 from pathlib import Path
 import tarfile
 import time
+import numpy as np
 import tensorflow as tf
-import tensorflowjs as tfjs
+import tensorflowjs a_s _modelstfjs
 
-DATASET_NAME = 'flickr_flowers_AtoB'
+DATASET_NAME = 'flickr_flower_photos'
 IMG_SIZE = 256 # images must be square
 
 ROOT_DIR = Path().resolve()
@@ -36,7 +37,7 @@ else: # we ARE running on colab. Use Drive for file reads/writes
         tar.close()
 
 CHECKPOINT_DIR = os.path.join(CHECKPOINTS_DIR, DATASET_NAME)
-TFJS_EXPORT_DIR = os.path.join(ROOT_DIR, 'tensorflowjs', DATASET_NAME)
+TFJS_EXPORT_DIR = os.path.join(ROOT_DIR, 'browser', 'tensorflow_js_models', DATASET_NAME)
 CHECKPOINT_PREFIX = 'ckpt'
 LOGS_DIR = os.path.join(ROOT_DIR, 'logs')
 LOG_DIR = os.path.join(LOGS_DIR, UNIQUE_SESSION_NAME)
@@ -69,6 +70,10 @@ def get_methods(obj, spacing=20):
 def load(image_file):
     image = tf.io.read_file(image_file)
     image = tf.image.decode_jpeg(image)
+    # remove alpha channel if present
+    image = tf.cond(tf.equal(tf.shape(image)[2], 4), lambda: image[:,:,:3], lambda: image)
+    # convert grayscale to RGB
+    image = tf.cond(tf.equal(tf.shape(image)[2], 1), lambda: tf.image.grayscale_to_rgb(image), lambda: image)
     w = tf.shape(image)[1]
     w = w // 2
     input_image = image[:, :w, :]
@@ -447,26 +452,26 @@ def main(operation):
             generator.save(save_path) # Keras hd5 format
             print('saved to {}'.format(save_path))
 
-            tf.saved_model.save(generator, os.path.join('models', DATASET_NAME + '_generator')) # "SavedModel" format
+            # tf.saved_model.save(generator, os.path.join('models', DATASET_NAME + '_generator')) # "SavedModel" format
 
-            # tfjs.converters.save_keras_model(generator, TFJS_EXPORT_DIR + '_generator') # hd5 -> tfjs (bins & json)
-            # print('saved to {}'.format(TFJS_EXPORT_DIR + '_generator'))
+            tfjs.converters.save_keras_model(generator, TFJS_EXPORT_DIR + '_generator', quantization_dtype=np.uint8) # hd5 -> tfjs (bins & json)
+            print('saved to {}'.format(TFJS_EXPORT_DIR + '_generator'))
 
-            tfjs.converters.convert_tf_saved_model(
-                os.path.join('models', DATASET_NAME + '_generator'),
-                output_dir=TFJS_EXPORT_DIR + '_generator',
-            ) # convert "SavedModel" to tfjs
+            # tfjs.converters.convert_tf_saved_model(
+            #     os.path.join('models', DATASET_NAME + '_generator'),
+            #     output_dir=TFJS_EXPORT_DIR + '_generator',
+            # ) # convert "SavedModel" to tfjs
 
             # tf.keras.utils.plot_model(generator, to_file='generator.png', show_shapes=True, show_layer_names=True, expand_nested=True)
 
     elif operation == 'predict':
         i = 0
-        for example_input, _example_target in train_dataset.take(1):
-            input_image = tf.image.decode_image(
-                example_input,
-                channels=3, # desired channels in *output* image after conversion
-                # dtype=tf.float32 # desired dtype of *output* image after conversion
-            )
+        for example_input, _example_target in train_dataset:
+            # input_image = tf.image.decode_image(
+            #     example_input,
+            #     channels=3, # desired channels in *output* image after conversion
+            #     # dtype=tf.float32 # desired dtype of *output* image after conversion
+            # )
             input_image = tf.cast(input_image, tf.float32)
             input_image = tf.expand_dims(input_image, 0) if len(input_image.shape) < 4 else input_image # prepend the fourth dimension (batch) to the tensor for some reason
             input_image = tf.image.grayscale_to_rgb(input_image) if (input_image.shape)[3] == 1 else input_image # if we only have one dimension in the final channel (i.e. it's a b&w image), then convert it to RGB by just making it (1, x, y, 3) instead of (1, x, y, 1)

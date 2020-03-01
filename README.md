@@ -12,7 +12,7 @@ pip3 install -r requirements.txt
 openssl req -newkey rsa:2048 -new -nodes -x509 -days 3650 -keyout key.pem -out cert.pem
 
 # ...then run a local server (e.g.):
-http-server --ssl --cert cert.pem
+http-server browser/ --ssl --cert cert.pem
 
 # ...then go to https://0.0.0.0:8080/index.html
 ```

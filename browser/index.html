@@ -1,0 +1,33 @@
+<html>
+  <head>
+    <script
+      type="text/javascript"
+      src="https://unpkg.com/@tensorflow/tfjs@1.5.2/dist/tf.js"
+    ></script>
+
+    <script type="module" src="./app.js" defer="defer"></script>
+    <script type="text/javascript" src="opencv.js"></script>
+    <style>
+      #predicted, #webcam, #input, #edges {
+        transform: scaleX(-1);
+      }
+      video, #edge_test, #image_test {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <video
+      autoplay
+      playsinline
+      muted
+      id="webcam"
+      width="256"
+      height="256"
+    ></video>
+    <canvas width="256" height="256" id="input"></canvas>
+    <canvas width="256" height="256" id="edges"></canvas>
+    <canvas width="256" height="256" id="predicted"></canvas>
+    test
+  </body>
+</html>

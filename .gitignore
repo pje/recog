@@ -1,4 +1,7 @@
+browser/tensorflow_js_models/
 checkpoints/*/
 datasets/*/
 logs/
 models/
+key.pem
+cert.pem
