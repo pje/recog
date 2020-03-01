@@ -8,15 +8,35 @@
     <script type="module" src="./app.js" defer="defer"></script>
     <script type="text/javascript" src="opencv.js"></script>
     <style>
-      #predicted, #webcam, #input, #edges {
+      #predicted,
+      #webcam,
+      #input,
+      #edges {
         transform: scaleX(-1);
       }
-      video, #edge_test, #image_test {
+      video,
+      #edge_test,
+      #image_test {
         display: none;
       }
     </style>
   </head>
   <body>
+    <div>
+      <input type="checkbox" id="video_on" checked />
+      <label for="video_on">Enable Webcam</label>
+    </div>
+    <div>
+      <input type="checkbox" id="predict_on" checked />
+      <label for="predict_on">Enabled Neural Net Prediction</label>
+    </div>
+    <div>
+      <input type="checkbox" id="test_image_on" />
+      <label for="test_image_on">Enabled Static Test Image</label>
+    </div>
+    <div id="framerate"></div>
+
+    <image id="image_test" src="image.png" width="256" height="256"></image>
     <video
       autoplay
       playsinline

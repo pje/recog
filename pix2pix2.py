@@ -11,7 +11,7 @@ import tarfile
 import time
 import numpy as np
 import tensorflow as tf
-import tensorflowjs a_s _modelstfjs
+import tensorflowjs as tfjs
 
 DATASET_NAME = 'flickr_flower_photos'
 IMG_SIZE = 256 # images must be square
@@ -23,11 +23,13 @@ try:
     from google.colab import drive
 except ImportError: # we're NOT running on colab. use local filesystem
     CHECKPOINTS_DIR = os.path.join(ROOT_DIR, 'checkpoints')
+    LOGS_DIR = os.path.join(ROOT_DIR, 'training_logs')
     DATASETS_DIR = os.path.join(ROOT_DIR, 'datasets')
     DATASET_DIR = os.path.join(DATASETS_DIR, DATASET_NAME)
 else: # we ARE running on colab. Use Drive for file reads/writes
     drive.mount('/content/gdrive')
     DRIVE_ROOT = os.path.join(ROOT_DIR, 'gdrive', 'My Drive')
+    LOGS_DIR = os.path.join(DRIVE_ROOT, 'training_logs')
     CHECKPOINTS_DIR = os.path.join(DRIVE_ROOT, 'checkpoints')
     DATASETS_DIR = os.path.join(DRIVE_ROOT, 'datasets')
     DATASET_DIR = os.path.join(DATASETS_DIR, DATASET_NAME)
@@ -39,7 +41,6 @@ else: # we ARE running on colab. Use Drive for file reads/writes
 CHECKPOINT_DIR = os.path.join(CHECKPOINTS_DIR, DATASET_NAME)
 TFJS_EXPORT_DIR = os.path.join(ROOT_DIR, 'browser', 'tensorflow_js_models', DATASET_NAME)
 CHECKPOINT_PREFIX = 'ckpt'
-LOGS_DIR = os.path.join(ROOT_DIR, 'logs')
 LOG_DIR = os.path.join(LOGS_DIR, UNIQUE_SESSION_NAME)
 BUFFER_SIZE = 400
 BATCH_SIZE = 1
