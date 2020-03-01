@@ -35,7 +35,7 @@ import time
 import tensorflow as tf
 from matplotlib import pyplot as plt
 
-DATASET_NAME = 'flickr_flowers_AtoB'
+DATASET_NAME = 'flickr_flower_photos'
 IMG_SIZE = 256 # images must be square
 
 ROOT_DIR = '/Users/pje/recog'
