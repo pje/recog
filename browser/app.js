@@ -44,7 +44,7 @@ async function main() {
   predictEnabledCheckbox.addEventListener("change", onpredictEnabledChange);
 
   const model = await tf.loadLayersModel(
-    "tensorflow_js_models/flickr_flower_illustrations_generator/model.json",
+    "tensorflow_js_models/flickr_flower_photos_generator/model.json",
     { strict: false }
   );
 

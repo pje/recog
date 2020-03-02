@@ -19,6 +19,8 @@ IMG_SIZE = 256 # images must be square
 ROOT_DIR = Path().resolve()
 UNIQUE_SESSION_NAME = DATASET_NAME + '_' + datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
 
+# import ipdb; ipdb.set_trace()
+
 try:
     from google.colab import drive
 except ImportError: # we're NOT running on colab. use local filesystem
@@ -151,7 +153,7 @@ def downsample(filters, kernel_size, name, apply_batchnorm=True, **kwargs):
         )
     )
     if apply_batchnorm:
-        result.add(tf.keras.layers.BatchNormalization(renorm=True))
+        result.add(tf.keras.layers.BatchNormalization())
     result.add(tf.keras.layers.LeakyReLU())
     return result
 
@@ -170,7 +172,7 @@ def upsample(filters, kernel_size, name, apply_dropout=False, **kwargs):
             **kwargs
         )
     )
-    result.add(tf.keras.layers.BatchNormalization(renorm=True))
+    result.add(tf.keras.layers.BatchNormalization())
     if apply_dropout:
         result.add(tf.keras.layers.Dropout(0.5))
     result.add(tf.keras.layers.ReLU())
@@ -352,7 +354,7 @@ def fit(generator, discriminator, generator_optimizer, discriminator_optimizer, 
             tf.io.write_file(
                 os.path.join(
                     LOG_DIR,
-                    UNIQUE_SESSION_NAME + "_epoch_" + str(epoch) + ".jpg"
+                    UNIQUE_SESSION_NAME + "_epoch_" + str(epoch).zfill(4) + ".jpg"
                 ),
                 encoded_image
             )
@@ -415,7 +417,7 @@ def main(operation):
         latest_checkpoint = tf.train.latest_checkpoint(CHECKPOINT_DIR)
         if latest_checkpoint:
             status = checkpoint.restore(latest_checkpoint)
-            status.assert_existing_objects_matched()
+            # status.assert_existing_objects_matched()
             print("Restored from {}".format(latest_checkpoint))
         else:
             print(
@@ -455,7 +457,7 @@ def main(operation):
 
             # tf.saved_model.save(generator, os.path.join('models', DATASET_NAME + '_generator')) # "SavedModel" format
 
-            tfjs.converters.save_keras_model(generator, TFJS_EXPORT_DIR + '_generator', quantization_dtype=np.uint8) # hd5 -> tfjs (bins & json)
+            tfjs.converters.save_keras_model(generator, TFJS_EXPORT_DIR + '_generator') # hd5 -> tfjs (bins & json)
             print('saved to {}'.format(TFJS_EXPORT_DIR + '_generator'))
 
             # tfjs.converters.convert_tf_saved_model(
@@ -463,26 +465,24 @@ def main(operation):
             #     output_dir=TFJS_EXPORT_DIR + '_generator',
             # ) # convert "SavedModel" to tfjs
 
-            # tf.keras.utils.plot_model(generator, to_file='generator.png', show_shapes=True, show_layer_names=True, expand_nested=True)
+            tf.keras.utils.plot_model(generator, to_file='generator.png', show_shapes=True, show_layer_names=True, expand_nested=True)
 
     elif operation == 'predict':
+        train_dataset = dataset_from_images(get_image_files(DATASET_DIR))
+        generator = tf.keras.models.load_model(
+            os.path.join(ROOT_DIR, 'models', DATASET_NAME + '_generator.h5')
+        )
         i = 0
-        for example_input, _example_target in train_dataset:
-            # input_image = tf.image.decode_image(
-            #     example_input,
-            #     channels=3, # desired channels in *output* image after conversion
-            #     # dtype=tf.float32 # desired dtype of *output* image after conversion
-            # )
-            input_image = tf.cast(input_image, tf.float32)
-            input_image = tf.expand_dims(input_image, 0) if len(input_image.shape) < 4 else input_image # prepend the fourth dimension (batch) to the tensor for some reason
-            input_image = tf.image.grayscale_to_rgb(input_image) if (input_image.shape)[3] == 1 else input_image # if we only have one dimension in the final channel (i.e. it's a b&w image), then convert it to RGB by just making it (1, x, y, 3) instead of (1, x, y, 1)
-            input_image, _ = normalize(input_image, input_image) # transform values: (0..255) -> (-1..1)
-            prediction = generator(input_image, training=True)
-            encoded_image = tf.image.encode_jpeg(tf.dtypes.cast((prediction[0] * 0.5 + 0.5) * 255, tf.uint8))
+        for input_image, _example_target in train_dataset.take(100):
+            # import ipdb; ipdb.set_trace()
+            input_image = tf.image.rot90(input_image)
+            prediction = generator(input_image, training=True)[0]
+            img_predicted = np.interp(prediction, [-1.0, 1.0], (0.0, 255.0))
+            encoded_image = tf.image.encode_jpeg(tf.dtypes.cast(img_predicted, tf.uint8))
             tf.io.write_file(
                 os.path.join(
                     LOG_DIR,
-                    UNIQUE_SESSION_NAME + "_generated_" + str(i) + ".jpg"
+                    UNIQUE_SESSION_NAME + "_generated_" + str(i).zfill(4) + ".jpg"
                 ),
                 encoded_image
             )
