@@ -417,7 +417,7 @@ def main(operation):
         latest_checkpoint = tf.train.latest_checkpoint(CHECKPOINT_DIR)
         if latest_checkpoint:
             status = checkpoint.restore(latest_checkpoint)
-            # status.assert_existing_objects_matched()
+            status.assert_existing_objects_matched()
             print("Restored from {}".format(latest_checkpoint))
         else:
             print(
