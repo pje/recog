@@ -14,21 +14,22 @@ import tensorflow as tf
 import tensorflowjs as tfjs
 
 DATASET_NAME = 'flickr_clouds'
-IMG_SIZE = 256 # images must be square
+IMG_SIZE = 256  # images must be square
 
 ROOT_DIR = Path().resolve()
-UNIQUE_SESSION_NAME = DATASET_NAME + '_' + datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+UNIQUE_SESSION_NAME = DATASET_NAME + '_' + \
+    datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
 
 # import ipdb; ipdb.set_trace()
 
 try:
     from google.colab import drive
-except ImportError: # we're NOT running on colab. use local filesystem
+except ImportError:  # we're NOT running on colab. use local filesystem
     CHECKPOINTS_DIR = os.path.join(ROOT_DIR, 'checkpoints')
     LOGS_DIR = os.path.join(ROOT_DIR, 'training_logs')
     DATASETS_DIR = os.path.join(ROOT_DIR, 'datasets')
     DATASET_DIR = os.path.join(DATASETS_DIR, DATASET_NAME)
-else: # we ARE running on colab. Use Drive for file reads/writes
+else:  # we ARE running on colab. Use Drive for file reads/writes
     drive.mount('/content/gdrive')
     DRIVE_ROOT = os.path.join(ROOT_DIR, 'gdrive', 'My Drive')
     LOGS_DIR = os.path.join(DRIVE_ROOT, 'training_logs')
@@ -41,7 +42,8 @@ else: # we ARE running on colab. Use Drive for file reads/writes
         tar.close()
 
 CHECKPOINT_DIR = os.path.join(CHECKPOINTS_DIR, DATASET_NAME)
-TFJS_EXPORT_DIR = os.path.join(ROOT_DIR, 'browser', 'tensorflow_js_models', DATASET_NAME)
+TFJS_EXPORT_DIR = os.path.join(
+    ROOT_DIR, 'browser', 'tensorflow_js_models', DATASET_NAME)
 CHECKPOINT_PREFIX = 'ckpt'
 LOG_DIR = os.path.join(LOGS_DIR, UNIQUE_SESSION_NAME)
 BUFFER_SIZE = 400
@@ -49,34 +51,37 @@ BATCH_SIZE = 1
 OUTPUT_CHANNELS = 3
 LAMBDA = 100
 MAX_EPOCHS = 140
-CHECKPOINT_SAVE_FREQUENCY = 20 # in epochs
+CHECKPOINT_SAVE_FREQUENCY = 20  # in epochs
 
 SUMMARY_WRITER = tf.summary.create_file_writer(LOG_DIR)
 
+
 def get_methods(obj, spacing=20):
-  methodList = []
-  for method_name in dir(obj):
-    try:
-        if callable(getattr(obj, method_name)):
+    methodList = []
+    for method_name in dir(obj):
+        try:
+            if callable(getattr(obj, method_name)):
+                methodList.append(str(method_name))
+        except:
             methodList.append(str(method_name))
-    except:
-        methodList.append(str(method_name))
-  processFunc = (lambda s: ' '.join(s.split())) or (lambda s: s)
-  for method in methodList:
-    try:
-        print(str(method.ljust(spacing)) + ' ' +
-              processFunc(str(getattr(obj, method).__doc__)[0:90]))
-    except:
-        print(method.ljust(spacing) + ' ' + ' getattr() failed')
+    processFunc = (lambda s: ' '.join(s.split())) or (lambda s: s)
+    for method in methodList:
+        try:
+            print(str(method.ljust(spacing)) + ' ' +
+                  processFunc(str(getattr(obj, method).__doc__)[0:90]))
+        except:
+            print(method.ljust(spacing) + ' ' + ' getattr() failed')
 
 
 def load(image_file):
     image = tf.io.read_file(image_file)
     image = tf.image.decode_jpeg(image)
     # remove alpha channel if present
-    image = tf.cond(tf.equal(tf.shape(image)[2], 4), lambda: image[:,:,:3], lambda: image)
+    image = tf.cond(
+        tf.equal(tf.shape(image)[2], 4), lambda: image[:, :, :3], lambda: image)
     # convert grayscale to RGB
-    image = tf.cond(tf.equal(tf.shape(image)[2], 1), lambda: tf.image.grayscale_to_rgb(image), lambda: image)
+    image = tf.cond(tf.equal(tf.shape(image)[
+                    2], 1), lambda: tf.image.grayscale_to_rgb(image), lambda: image)
     w = tf.shape(image)[1]
     w = w // 2
     input_image = image[:, :w, :]
@@ -125,14 +130,16 @@ def normalize(input_image, real_image):
 
 @tf.function()
 def random_jitter(input_image, real_image):
-    scaling_factor = 1.1171875 # turns 256 into 286 (as the original paper used)
+    # turns 256 into 286 (as the original paper used)
+    scaling_factor = 1.1171875
     scaled_size = round(scaling_factor * IMG_SIZE)
     # resize to 286 x 286 x 3
-    input_image, real_image = resize(input_image, real_image, scaled_size, scaled_size)
+    input_image, real_image = resize(
+        input_image, real_image, scaled_size, scaled_size)
     # ...then randomly crop it back down to 256 x 256 x 3
     input_image, real_image = random_crop(input_image, real_image)
     if tf.random.uniform(()) > 0.5:
-        # random mirroring
+            # random mirroring
         input_image = tf.image.flip_left_right(input_image)
         real_image = tf.image.flip_left_right(real_image)
     return input_image, real_image
@@ -180,26 +187,42 @@ def upsample(filters, kernel_size, name, apply_dropout=False, **kwargs):
 
 
 def Generator():
-    inputs = tf.keras.layers.Input(shape=[IMG_SIZE, IMG_SIZE, 3], name="generator_input")
+    inputs = tf.keras.layers.Input(
+        shape=[IMG_SIZE, IMG_SIZE, 3], name="generator_input")
     down_stack = [
-        downsample(64,  4, name="downsample_1", apply_batchnorm=False, input_shape=(256, 256, 3)),
-        downsample(128, 4, name="downsample_2", apply_batchnorm=True,  input_shape=(128, 128, 64)),
-        downsample(256, 4, name="downsample_3", apply_batchnorm=True,  input_shape=(64, 64, 128)),
-        downsample(512, 4, name="downsample_4", apply_batchnorm=True,  input_shape=(32, 32, 256)),
-        downsample(512, 4, name="downsample_5", apply_batchnorm=True,  input_shape=(16, 16, 512)),
-        downsample(512, 4, name="downsample_6", apply_batchnorm=True,  input_shape=(8, 8, 512)),
-        downsample(512, 4, name="downsample_7", apply_batchnorm=True,  input_shape=(4, 4, 512)),
-        downsample(512, 4, name="downsample_8", apply_batchnorm=True,  input_shape=(2, 2, 512)),
+        downsample(64,  4, name="downsample_1",
+                   apply_batchnorm=False, input_shape=(256, 256, 3)),
+        downsample(128, 4, name="downsample_2",
+                   apply_batchnorm=True,  input_shape=(128, 128, 64)),
+        downsample(256, 4, name="downsample_3",
+                   apply_batchnorm=True,  input_shape=(64, 64, 128)),
+        downsample(512, 4, name="downsample_4",
+                   apply_batchnorm=True,  input_shape=(32, 32, 256)),
+        downsample(512, 4, name="downsample_5",
+                   apply_batchnorm=True,  input_shape=(16, 16, 512)),
+        downsample(512, 4, name="downsample_6",
+                   apply_batchnorm=True,  input_shape=(8, 8, 512)),
+        downsample(512, 4, name="downsample_7",
+                   apply_batchnorm=True,  input_shape=(4, 4, 512)),
+        downsample(512, 4, name="downsample_8",
+                   apply_batchnorm=True,  input_shape=(2, 2, 512)),
     ]
 
     up_stack = [
-        upsample(512, 4, name="upsample_1", apply_dropout=True,  input_shape=(1, 1, 512)),
-        upsample(512, 4, name="upsample_2", apply_dropout=True,  input_shape=(2, 2, 1024)),
-        upsample(512, 4, name="upsample_3", apply_dropout=True,  input_shape=(4, 4, 1024)),
-        upsample(512, 4, name="upsample_4", apply_dropout=False, input_shape=(8, 8, 1024)),
-        upsample(256, 4, name="upsample_5", apply_dropout=False, input_shape=(16, 16, 1024)),
-        upsample(128, 4, name="upsample_6", apply_dropout=False, input_shape=(32, 32, 512)),
-        upsample(64,  4, name="upsample_7", apply_dropout=False, input_shape=(64, 64, 256)),
+        upsample(512, 4, name="upsample_1",
+                 apply_dropout=True,  input_shape=(1, 1, 512)),
+        upsample(512, 4, name="upsample_2", apply_dropout=True,
+                 input_shape=(2, 2, 1024)),
+        upsample(512, 4, name="upsample_3", apply_dropout=True,
+                 input_shape=(4, 4, 1024)),
+        upsample(512, 4, name="upsample_4",
+                 apply_dropout=False, input_shape=(8, 8, 1024)),
+        upsample(256, 4, name="upsample_5", apply_dropout=False,
+                 input_shape=(16, 16, 1024)),
+        upsample(128, 4, name="upsample_6", apply_dropout=False,
+                 input_shape=(32, 32, 512)),
+        upsample(64,  4, name="upsample_7", apply_dropout=False,
+                 input_shape=(64, 64, 256)),
     ]
 
     initializer = tf.random_normal_initializer(0., 0.02)
@@ -245,10 +268,13 @@ def generator_loss(disc_generated_output, gen_output, target):
 
 def Discriminator():
     initializer = tf.random_normal_initializer(0., 0.02)
-    inp = tf.keras.layers.Input(shape=[IMG_SIZE, IMG_SIZE, 3], name='input_image')
-    tar = tf.keras.layers.Input(shape=[IMG_SIZE, IMG_SIZE, 3], name='target_image')
+    inp = tf.keras.layers.Input(
+        shape=[IMG_SIZE, IMG_SIZE, 3], name='input_image')
+    tar = tf.keras.layers.Input(
+        shape=[IMG_SIZE, IMG_SIZE, 3], name='target_image')
     x = tf.keras.layers.concatenate([inp, tar])
-    down1 = downsample(round(IMG_SIZE / 4), 4, name="down1", apply_batchnorm=False)(x)
+    down1 = downsample(round(IMG_SIZE / 4), 4, name="down1",
+                       apply_batchnorm=False)(x)
     down2 = downsample(round(IMG_SIZE / 2), 4, name="down2",)(down1)
     down3 = downsample(round(IMG_SIZE * 1), 4, name="down3",)(down2)
     zero_pad1 = tf.keras.layers.ZeroPadding2D()(down3)
@@ -350,11 +376,13 @@ def fit(generator, discriminator, generator_optimizer, discriminator_optimizer, 
         # generate & save a random image at the end of every epoch
         for example_input, _example_target in train_dataset.take(1):
             prediction = generator(example_input, training=True)
-            encoded_image = tf.image.encode_jpeg(tf.dtypes.cast((prediction[0] * 0.5 + 0.5) * 255, tf.uint8))
+            encoded_image = tf.image.encode_jpeg(tf.dtypes.cast(
+                (prediction[0] * 0.5 + 0.5) * 255, tf.uint8))
             tf.io.write_file(
                 os.path.join(
                     LOG_DIR,
-                    UNIQUE_SESSION_NAME + "_epoch_" + str(epoch).zfill(4) + ".jpg"
+                    UNIQUE_SESSION_NAME + "_epoch_" +
+                    str(epoch).zfill(4) + ".jpg"
                 ),
                 encoded_image
             )
@@ -376,11 +404,12 @@ def main(operation):
         if not os.path.isdir(directory):
             raise Exception("Not a directory: {}".format(directory))
         else:
-            train_files = glob(os.path.join(directory, '**', '*.png'), recursive=True) + glob(os.path.join(directory, '**', '*.jpg'), recursive=True)
+            train_files = glob(os.path.join(directory, '**', '*.png'), recursive=True) + \
+                glob(os.path.join(directory, '**', '*.jpg'), recursive=True)
             if len(train_files) < 1:
-                raise Exception("No training images exist in {}".format(directory))
+                raise Exception(
+                    "No training images exist in {}".format(directory))
             return train_files
-
 
     def dataset_from_images(image_files):
         train_dataset = tf.data.Dataset.list_files(image_files)
@@ -391,7 +420,6 @@ def main(operation):
         train_dataset = train_dataset.shuffle(BUFFER_SIZE)
         train_dataset = train_dataset.batch(BATCH_SIZE)
         return train_dataset
-
 
     if operation == 'train' or operation == 'export':
         train_dataset = dataset_from_images(get_image_files(DATASET_DIR))
@@ -452,7 +480,7 @@ def main(operation):
                 epochs=1
             )
             save_path = os.path.join('models', DATASET_NAME + '_generator.h5')
-            generator.save(save_path) # Keras hd5 format
+            generator.save(save_path)  # Keras hd5 format
             print('saved to {}'.format(save_path))
 
             # converter = tf.lite.TFLiteConverter.from_keras_model(generator)
@@ -461,7 +489,8 @@ def main(operation):
             # open(os.path.join('models', DATASET_NAME + ".tflite"), "wb").write(tflite_quant_model)
             # print('saved TFLite quantized model to to {}'.format(os.path.join('models', DATASET_NAME + ".tflite")))
 
-            tfjs.converters.save_keras_model(generator, TFJS_EXPORT_DIR + '_generator') # hd5 -> tfjs (bins & json)
+            tfjs.converters.save_keras_model(
+                generator, TFJS_EXPORT_DIR + '_generator')  # hd5 -> tfjs (bins & json)
             print('saved to {}'.format(TFJS_EXPORT_DIR + '_generator'))
 
             # tfjs.converters.convert_tf_saved_model(
@@ -469,7 +498,8 @@ def main(operation):
             #     output_dir=TFJS_EXPORT_DIR + '_generator',
             # ) # convert "SavedModel" to tfjs
 
-            tf.keras.utils.plot_model(generator, to_file='generator.png', show_shapes=True, show_layer_names=True, expand_nested=True)
+            tf.keras.utils.plot_model(generator, to_file='generator.png',
+                                      show_shapes=True, show_layer_names=True, expand_nested=True)
 
     elif operation == 'predict':
         train_dataset = dataset_from_images(get_image_files(DATASET_DIR))
@@ -482,17 +512,20 @@ def main(operation):
             input_image = tf.image.rot90(input_image)
             prediction = generator(input_image, training=True)[0]
             img_predicted = np.interp(prediction, [-1.0, 1.0], (0.0, 255.0))
-            encoded_image = tf.image.encode_jpeg(tf.dtypes.cast(img_predicted, tf.uint8))
+            encoded_image = tf.image.encode_jpeg(
+                tf.dtypes.cast(img_predicted, tf.uint8))
             tf.io.write_file(
                 os.path.join(
                     LOG_DIR,
-                    UNIQUE_SESSION_NAME + "_generated_" + str(i).zfill(4) + ".jpg"
+                    UNIQUE_SESSION_NAME + "_generated_" +
+                    str(i).zfill(4) + ".jpg"
                 ),
                 encoded_image
             )
             i = i + 1
     else:
         raise Exception("operation must be 'train', 'export', or 'predict'")
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
