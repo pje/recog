@@ -13,7 +13,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflowjs as tfjs
 
-DATASET_NAME = 'flickr_flower_photos'
+DATASET_NAME = 'flickr_clouds'
 IMG_SIZE = 256 # images must be square
 
 ROOT_DIR = Path().resolve()
@@ -455,7 +455,11 @@ def main(operation):
             generator.save(save_path) # Keras hd5 format
             print('saved to {}'.format(save_path))
 
-            # tf.saved_model.save(generator, os.path.join('models', DATASET_NAME + '_generator')) # "SavedModel" format
+            # converter = tf.lite.TFLiteConverter.from_keras_model(generator)
+            # converter.optimizations = [tf.lite.Optimize.OPTIMIZE_FOR_LATENCY]
+            # tflite_quant_model = converter.convert()
+            # open(os.path.join('models', DATASET_NAME + ".tflite"), "wb").write(tflite_quant_model)
+            # print('saved TFLite quantized model to to {}'.format(os.path.join('models', DATASET_NAME + ".tflite")))
 
             tfjs.converters.save_keras_model(generator, TFJS_EXPORT_DIR + '_generator') # hd5 -> tfjs (bins & json)
             print('saved to {}'.format(TFJS_EXPORT_DIR + '_generator'))
